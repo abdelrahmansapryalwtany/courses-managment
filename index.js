@@ -172,8 +172,18 @@ app.use((err, req, res, next) => {
 });
 
 
-app.listen(process.env.PORT || 4000, () => {
+// app.listen(process.env.PORT || 4000, () => {
 
-    console.log('listening on port : 4000');
+//     console.log('listening on port : 4000');
 
-});
+// });
+
+
+
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(process.env.PORT || 4000, () => {
+        console.log('listening on port : 4000');
+    });
+}
+
+export default app;
