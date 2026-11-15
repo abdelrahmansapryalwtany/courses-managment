@@ -25,6 +25,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({ storage: diskStorage, fileFilter: fileFilter });
+
 const usersRouter = express.Router();
 
 usersRouter.route('/')

@@ -1,7 +1,7 @@
 // import { courses } from "../data/courses.js"
 import { validationResult } from "express-validator";
 
-import { SUCCESS, ERROR, FAIL } from "../utils/httpStatusTest.js";
+import { SUCCESS, FAIL } from "../utils/httpStatusTest.js";
 
 import Course from "../models/course.model.js";
 
