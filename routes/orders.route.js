@@ -3,8 +3,41 @@ import Order from "../models/order.model.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import allowedTo from "../middlewares/allowedTo.js";
 import userRoles from "../utils/userRoles.js";
+import Stripe from "stripe";
 
 const ordersRouter = express.Router();
+
+// إنشاء جلسة دفع عبر Stripe
+ordersRouter.post("/create-checkout-session", async (req, res) => {
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+    const { items, customer } = req.body;
+
+    const line_items = items.map((item) => ({
+      price_data: {
+        currency: "usd",
+        product_data: {
+          name: item.title,
+        },
+        unit_amount: Math.round(Number(item.price) * 100), // Stripe يحسب السعر بالسنت
+      },
+      quantity: item.quantity || 1,
+    }));
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items,
+      mode: "payment",
+      success_url: `${process.env.CLIENT_URL}/payment-success`,
+      cancel_url: `${process.env.CLIENT_URL}/checkout`,
+    });
+
+    res.json({ status: "success", url: session.url });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
 
 // إنشاء طلب جديد (متاح للعميل)
 ordersRouter.post("/", async (req, res) => {
