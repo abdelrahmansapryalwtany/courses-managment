@@ -7,12 +7,11 @@ import Stripe from "stripe";
 
 const ordersRouter = express.Router();
 
-// إنشاء جلسة دفع عبر Stripe
+// 1. إنشاء جلسة دفع عبر Stripe
 ordersRouter.post("/create-checkout-session", async (req, res) => {
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-    const { items, customer } = req.body;
+    const { items } = req.body;
 
     const line_items = items.map((item) => ({
       price_data: {
@@ -20,7 +19,7 @@ ordersRouter.post("/create-checkout-session", async (req, res) => {
         product_data: {
           name: item.title,
         },
-        unit_amount: Math.round(Number(item.price) * 100), // Stripe يحسب السعر بالسنت
+        unit_amount: Math.round(Number(item.price) * 100),
       },
       quantity: item.quantity || 1,
     }));
@@ -38,10 +37,27 @@ ordersRouter.post("/create-checkout-session", async (req, res) => {
   }
 });
 
-// إنشاء طلب جديد (متاح للعميل)
+// 2. إنشاء طلب جديد (للعميل أو الزائر) + تسجيل أول خطوة في السجل
 ordersRouter.post("/", async (req, res) => {
   try {
-    const newOrder = new Order(req.body);
+    const paymentLabel =
+      req.body.customer?.paymentMethod === "STRIPE"
+        ? "Paid online via Stripe"
+        : "Cash on Delivery";
+
+    const newOrder = new Order({
+      ...req.body,
+      statusHistory: [
+        {
+          status: "Pending",
+          updatedBy: req.body.customer?.fullName || "Customer",
+          role: req.body.user ? "USER" : "GUEST",
+          note: `Order created (${paymentLabel})`,
+          updatedAt: new Date(),
+        },
+      ],
+    });
+
     await newOrder.save();
     res.status(201).json({ status: "success", data: { order: newOrder } });
   } catch (err) {
@@ -49,7 +65,19 @@ ordersRouter.post("/", async (req, res) => {
   }
 });
 
-// جلب كل الطلبات (للأدمن والمدير فقط)
+// 3. جلب طلبات المستخدم الحالي (للعميل المسجل)
+ordersRouter.get("/my-orders", verifyToken, async (req, res) => {
+  try {
+    const orders = await Order.find({ user: req.user.id }).sort({
+      createdAt: -1,
+    });
+    res.json({ status: "success", data: { orders } });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+// 4. جلب كل الطلبات (للأدمن والمدير فقط)
 ordersRouter.get(
   "/",
   verifyToken,
@@ -64,47 +92,62 @@ ordersRouter.get(
   },
 );
 
-// جلب طلبات المستخدم الحالي (للعميل المسجل)
-ordersRouter.get("/my-orders", verifyToken, async (req, res) => {
+// 5. جلب تفاصيل طلب واحد بالـ ID (للأدمن/المدير أو صاحب الطلب)
+ordersRouter.get("/:id", verifyToken, async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user.id }).sort({
-      createdAt: -1,
-    });
-    res.json({ status: "success", data: { orders } });
+    const order = await Order.findById(req.params.id).populate(
+      "user",
+      "firstName lastName email role",
+    );
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ status: "fail", message: "Order not found" });
+    }
+
+    const isStaff =
+      req.user.role === userRoles.ADMIN || req.user.role === userRoles.MANAGER;
+    const isOwner = order.user && order.user._id.toString() === req.user.id;
+
+    if (!isStaff && !isOwner) {
+      return res
+        .status(403)
+        .json({ status: "fail", message: "Not authorized to view this order" });
+    }
+
+    res.json({ status: "success", data: { order } });
   } catch (err) {
-    res.status(500).json({ status: "error", message: err.message });
+    res.status(400).json({ status: "fail", message: err.message });
   }
 });
 
-// (اختياري للأدمن) جلب كل طلبات مستخدم معين بالـ ID
-ordersRouter.get(
-  "/user/:userId",
-  verifyToken,
-  allowedTo(userRoles.ADMIN, userRoles.MANAGER),
-  async (req, res) => {
-    try {
-      const orders = await Order.find({ user: req.params.userId }).sort({
-        createdAt: -1,
-      });
-      res.json({ status: "success", data: { orders } });
-    } catch (err) {
-      res.status(500).json({ status: "error", message: err.message });
-    }
-  },
-);
-
-// تحديث حالة الطلب (للأدمن والمدير فقط)
+// 6. تحديث حالة الطلب + تسجيل من قام بالتغيير في statusHistory
 ordersRouter.patch(
   "/:id/status",
   verifyToken,
   allowedTo(userRoles.ADMIN, userRoles.MANAGER),
   async (req, res) => {
     try {
-      const order = await Order.findByIdAndUpdate(
-        req.params.id,
-        { status: req.body.status },
-        { new: true },
-      );
+      const { status, note } = req.body;
+      const order = await Order.findById(req.params.id);
+
+      if (!order) {
+        return res
+          .status(404)
+          .json({ status: "fail", message: "Order not found" });
+      }
+
+      order.status = status;
+      order.statusHistory.push({
+        status,
+        updatedBy: req.user.email,
+        role: req.user.role,
+        note: note || `Status changed to ${status}`,
+        updatedAt: new Date(),
+      });
+
+      await order.save();
       res.json({ status: "success", data: { order } });
     } catch (err) {
       res.status(400).json({ status: "fail", message: err.message });

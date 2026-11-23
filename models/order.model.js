@@ -5,7 +5,7 @@ const orderSchema = new mongoose.Schema(
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: null, // سيكون null لو اشترى كزائر، ويحمل ID المستخدم لو مسجل دخول
+      default: null,
     },
     customer: {
       fullName: { type: String, required: true },
@@ -21,6 +21,7 @@ const orderSchema = new mongoose.Schema(
         title: String,
         price: Number,
         quantity: Number,
+        image: String,
       },
     ],
     totalPrice: { type: Number, required: true },
@@ -29,10 +30,17 @@ const orderSchema = new mongoose.Schema(
       enum: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
       default: "Pending",
     },
+    statusHistory: [
+      {
+        status: { type: String, required: true },
+        updatedBy: { type: String, default: "Customer" },
+        role: { type: String, default: "CUSTOMER" },
+        note: { type: String, default: "" },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true },
 );
 
-const Order = mongoose.model("Order", orderSchema);
-
-export default Order;
+export default mongoose.model("Order", orderSchema);
