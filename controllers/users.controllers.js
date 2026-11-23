@@ -67,29 +67,38 @@ const register = asyncWrapper(async (req, res, next) => {
   return res.status(201).json({ status: SUCCESS, data: { user: newUser } });
 });
 
-const updateUserRole = asyncWrapper(async (req, res, next) => {
-  const user = await User.findByIdAndUpdate(
-    req.params.userId,
-    { role: req.body.role },
-    { new: true, runValidators: true },
-  );
+const PROTECTED_ADMIN_EMAIL = "admin@mystore.com"; // <-- ضع إيميل الأدمن التجريبي هنا
 
-  if (!user) {
-    const error = appError.create("User not found", 404, FAIL);
-    return next(error);
+const updateUserRole = asyncWrapper(async (req, res, next) => {
+  const targetUser = await User.findById(req.params.userId);
+  if (!targetUser) {
+    return next(appError.create("User not found", 404, FAIL));
   }
 
-  res.json({ status: SUCCESS, data: { user } });
+  if (targetUser.email === PROTECTED_ADMIN_EMAIL) {
+    return next(
+      appError.create("Demo Super Admin role cannot be modified", 403, FAIL),
+    );
+  }
+
+  targetUser.role = req.body.role;
+  await targetUser.save();
+  res.json({ status: SUCCESS, data: { user: targetUser } });
 });
 
 const deleteUser = asyncWrapper(async (req, res, next) => {
-  const user = await User.findByIdAndDelete(req.params.userId);
-
-  if (!user) {
-    const error = appError.create("User not found", 404, FAIL);
-    return next(error);
+  const targetUser = await User.findById(req.params.userId);
+  if (!targetUser) {
+    return next(appError.create("User not found", 404, FAIL));
   }
 
+  if (targetUser.email === PROTECTED_ADMIN_EMAIL) {
+    return next(
+      appError.create("Demo Super Admin account cannot be deleted", 403, FAIL),
+    );
+  }
+
+  await User.findByIdAndDelete(req.params.userId);
   res.json({ status: SUCCESS, data: null });
 });
 
