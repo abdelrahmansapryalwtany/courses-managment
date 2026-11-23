@@ -67,7 +67,8 @@ const register = asyncWrapper(async (req, res, next) => {
   return res.status(201).json({ status: SUCCESS, data: { user: newUser } });
 });
 
-const PROTECTED_ADMIN_EMAIL = "admin@mystore.com"; // <-- ضع إيميل الأدمن التجريبي هنا
+const PROTECTED_ADMIN_EMAIL = "admin@gmail.com";
+const PROTECTED_MANAGER_EMAIL = "manager@gmail.com";
 
 const updateUserRole = asyncWrapper(async (req, res, next) => {
   const targetUser = await User.findById(req.params.userId);
@@ -75,9 +76,16 @@ const updateUserRole = asyncWrapper(async (req, res, next) => {
     return next(appError.create("User not found", 404, FAIL));
   }
 
-  if (targetUser.email === PROTECTED_ADMIN_EMAIL) {
+  if (
+    targetUser.email === PROTECTED_ADMIN_EMAIL ||
+    targetUser.email === PROTECTED_MANAGER_EMAIL
+  ) {
     return next(
-      appError.create("Demo Super Admin role cannot be modified", 403, FAIL),
+      appError.create(
+        "Demo Super Admin or Manager role cannot be modified",
+        403,
+        FAIL,
+      ),
     );
   }
 
@@ -92,9 +100,16 @@ const deleteUser = asyncWrapper(async (req, res, next) => {
     return next(appError.create("User not found", 404, FAIL));
   }
 
-  if (targetUser.email === PROTECTED_ADMIN_EMAIL) {
+  if (
+    targetUser.email === PROTECTED_ADMIN_EMAIL ||
+    targetUser.email === PROTECTED_MANAGER_EMAIL
+  ) {
     return next(
-      appError.create("Demo Super Admin account cannot be deleted", 403, FAIL),
+      appError.create(
+        "Demo Super Admin or Manager account cannot be deleted",
+        403,
+        FAIL,
+      ),
     );
   }
 
