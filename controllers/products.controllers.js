@@ -8,80 +8,71 @@ import appError from "../utils/appError.js";
 
 import { asyncWrapper } from "../middlewares/asyncWrapper.js";
 
+const getAllProducts = asyncWrapper(async (req, res) => {
+  const limit = +req.query.limit || 10;
+  const page = +req.query.page || 1;
+  const offset = (page - 1) * limit;
+  const search = req.query.search || "";
 
-const getAllProducts = asyncWrapper(
-    async (req, res) => {
+  // بناء شرط البحث (إذا وُجد نص بحث)
+  const query = search
+    ? {
+        $or: [
+          { title: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
+        ],
+      }
+    : {};
 
+  const products = await Product.find(query, { __v: false })
+    .limit(limit)
+    .skip(offset);
 
-        const limit = +req.query.limit || 10;
-        const page = +req.query.page || 1;
-        const offset = (page - 1) * limit;
+  const totalProducts = await Product.countDocuments(query);
+  const totalPages = Math.ceil(totalProducts / limit);
 
-        const products = await Product.find({}, { "__v": false })
-            .limit(limit)
-            .skip(offset);
+  res.json({
+    status: SUCCESS,
+    data: { products, totalPages, currentPage: page },
+  });
+});
 
-        const totalProducts = await Product.countDocuments();
+const getProduct = asyncWrapper(async (req, res, next) => {
+  const product = await Product.findById(req.params.productId);
 
-        const totalPages = Math.ceil(totalProducts / limit);
+  if (!product) {
+    const error = appError.create("Product not found", 404, FAIL);
 
-        res.json({ status: SUCCESS, data: { products, totalPages, currentPage: page } });
-    }
-);
+    return next(error);
+  }
 
+  return res.json({
+    status: SUCCESS,
+    data: { product },
+  });
+});
 
-const getProduct = asyncWrapper(
-    async (req, res, next) => {
+const addProduct = asyncWrapper(async (req, res, next) => {
+  const errors = validationResult(req);
 
-        const product = await Product.findById(req.params.productId);
+  if (!errors.isEmpty()) {
+    const error = appError.create(errors.array(), 400, FAIL);
 
-        if (!product) {
-            const error = appError.create(
-                'Product not found',
-                404,
-                FAIL
-            );
+    return next(error);
+  }
 
-            return next(error);
-        }
+  const newProduct = new Product({
+    ...req.body,
+    image: req.file.filename,
+  });
 
-        return res.json({
-            status: SUCCESS,
-            data: { product }
-        });
-    }
-);
+  await newProduct.save();
 
-
-const addProduct = asyncWrapper(
-    async (req, res, next) => {
-
-        const errors = validationResult(req);
-
-        if (!errors.isEmpty()) {
-            const error = appError.create(
-                errors.array(),
-                400,
-                FAIL
-            );
-
-            return next(error);
-        }
-
-        const newProduct = new Product({
-            ...req.body,
-            image: req.file.filename
-        });
-
-        await newProduct.save();
-
-        return res.status(201).json({
-            status: SUCCESS,
-            data: { product: newProduct }
-        });
-    }
-);
-
+  return res.status(201).json({
+    status: SUCCESS,
+    data: { product: newProduct },
+  });
+});
 
 // const updateProduct = asyncWrapper(
 //     async (req, res) => {
@@ -101,86 +92,76 @@ const addProduct = asyncWrapper(
 //     }
 // );
 
-const updateProduct = asyncWrapper(
-    async (req, res) => {
+const updateProduct = asyncWrapper(async (req, res) => {
+  const productId = req.params.productId;
 
-        const productId = req.params.productId;
+  const updateData = {
+    ...req.body,
+  };
 
-        const updateData = {
-            ...req.body
-        };
+  if (req.file) {
+    updateData.image = req.file.filename;
+  }
 
-        if (req.file) {
-            updateData.image = req.file.filename;
-        }
+  const updatedProduct = await Product.findByIdAndUpdate(
+    productId,
+    { $set: updateData },
+    { returnDocument: "after" },
+  );
 
-        const updatedProduct = await Product.findByIdAndUpdate(
-            productId,
-            { $set: updateData },
-            { returnDocument: "after" }
-        );
+  return res.status(200).json({
+    status: SUCCESS,
+    data: { product: updatedProduct },
+  });
+});
 
-        return res.status(200).json({
-            status: SUCCESS,
-            data: { product: updatedProduct }
-        });
-    }
-);
+const deleteProduct = asyncWrapper(async (req, res) => {
+  await Product.findByIdAndDelete(req.params.productId);
 
+  return res.status(200).json({
+    status: SUCCESS,
+    data: null,
+  });
+});
 
-const deleteProduct = asyncWrapper(
-    async (req, res) => {
+const getCategories = asyncWrapper(async (req, res) => {
+  const categories = await Product.distinct("category");
 
-        await Product.findByIdAndDelete(req.params.productId);
+  return res.json({
+    status: SUCCESS,
+    data: { categories },
+  });
+});
 
-        return res.status(200).json({
-            status: SUCCESS,
-            data: null
-        });
-    }
-);
+const getCategoryProducts = asyncWrapper(async (req, res) => {
+  const limit = +req.query.limit || 10;
+  const page = +req.query.page || 1;
+  const offset = (page - 1) * limit;
 
-const getCategories = asyncWrapper(
-    async (req, res) => {
+  const products = await Product.find({
+    category: req.params.category,
+  })
+    .limit(limit)
+    .skip(offset);
 
-        const categories = await Product.distinct('category');
+  const totalProducts = await Product.countDocuments({
+    category: req.params.category,
+  });
 
-        return res.json({
-            status: SUCCESS,
-            data: { categories }
-        });
-    }
-);
+  const totalPages = Math.ceil(totalProducts / limit);
 
-const getCategoryProducts = asyncWrapper(
-    async (req, res) => {
-
-        const limit = +req.query.limit || 10;
-        const page = +req.query.page || 1;
-        const offset = (page - 1) * limit;
-
-        const products = await Product.find({
-            category: req.params.category
-        }).limit(limit).skip(offset);
-
-        const totalProducts = await Product.countDocuments({ category: req.params.category });
-
-        const totalPages = Math.ceil(totalProducts / limit);
-
-        return res.json({
-            status: SUCCESS,
-            data: { products, totalPages, currentPage: page }
-        });
-    }
-);
-
+  return res.json({
+    status: SUCCESS,
+    data: { products, totalPages, currentPage: page },
+  });
+});
 
 export default {
-    getAllProducts,
-    getProduct,
-    addProduct,
-    updateProduct,
-    deleteProduct,
-    getCategories,
-    getCategoryProducts
+  getAllProducts,
+  getProduct,
+  addProduct,
+  updateProduct,
+  deleteProduct,
+  getCategories,
+  getCategoryProducts,
 };
