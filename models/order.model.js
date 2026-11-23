@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema(
   {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null, // سيكون null لو اشترى كزائر، ويحمل ID المستخدم لو مسجل دخول
+    },
     customer: {
       fullName: { type: String, required: true },
       phone: { type: String, required: true },

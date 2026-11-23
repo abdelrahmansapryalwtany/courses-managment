@@ -64,6 +64,35 @@ ordersRouter.get(
   },
 );
 
+// جلب طلبات المستخدم الحالي (للعميل المسجل)
+ordersRouter.get("/my-orders", verifyToken, async (req, res) => {
+  try {
+    const orders = await Order.find({ user: req.user.id }).sort({
+      createdAt: -1,
+    });
+    res.json({ status: "success", data: { orders } });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+// (اختياري للأدمن) جلب كل طلبات مستخدم معين بالـ ID
+ordersRouter.get(
+  "/user/:userId",
+  verifyToken,
+  allowedTo(userRoles.ADMIN, userRoles.MANAGER),
+  async (req, res) => {
+    try {
+      const orders = await Order.find({ user: req.params.userId }).sort({
+        createdAt: -1,
+      });
+      res.json({ status: "success", data: { orders } });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err.message });
+    }
+  },
+);
+
 // تحديث حالة الطلب (للأدمن والمدير فقط)
 ordersRouter.patch(
   "/:id/status",
