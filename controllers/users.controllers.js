@@ -34,8 +34,11 @@ const login = asyncWrapper(async (req, res, next) => {
   }
   const token = await generateJWT({
     id: user._id,
+    firstName: user.firstName,
+    lastName: user.lastName,
     email: user.email,
     role: user.role,
+    avatar: user.avatar,
   });
   return res.json({ status: SUCCESS, data: { token } });
 });
@@ -58,8 +61,11 @@ const register = asyncWrapper(async (req, res, next) => {
   });
   const token = await generateJWT({
     id: newUser._id,
+    firstName: newUser.firstName,
+    lastName: newUser.lastName,
     email: newUser.email,
     role: newUser.role,
+    avatar: newUser.avatar,
   });
   newUser.token = token;
   await newUser.save();
