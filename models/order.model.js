@@ -39,8 +39,10 @@ const orderSchema = new mongoose.Schema(
         updatedAt: { type: Date, default: Date.now },
       },
     ],
+    trackingNumber: { type: String, default: null },
+    shippingLabelUrl: { type: String, default: null },
   },
   { timestamps: true },
 );
-
-export default mongoose.model("Order", orderSchema);
+const Order = mongoose.model("Order", orderSchema);
+export default Order;
